@@ -134,10 +134,6 @@ contract('Splitter', ([owner, second, third, fourth, fifth]) => {
 
             assert.equal(result, expectedResult);
         });
-
-        it('emit LogWithdrawal event upon successful withdraw', async() => {
-            
-        });
     });
 
     describe('split should', async () => {
@@ -199,7 +195,12 @@ contract('Splitter', ([owner, second, third, fourth, fifth]) => {
         });
 
         it('emit LogSplit event upon successful withdraw', async() => {
+            const splitValue = 100;
 
+            await sut.addSplitRecipient(owner, { from: fourth });
+            const result = await sut.split({ from: fourth, value: splitValue });
+
+            assert.equal(result.logs[0].event, 'LogSplit');
         });
     });
 
@@ -236,7 +237,9 @@ contract('Splitter', ([owner, second, third, fourth, fifth]) => {
         });
 
         it('emit LogNewSplitRecipient event upon successful withdraw', async() => {
+            const result = await sut.addSplitRecipient(second);
 
+            assert.equal(result.logs[0].event, 'LogNewSplitRecipient');
         });
     });
 
@@ -269,31 +272,35 @@ contract('Splitter', ([owner, second, third, fourth, fifth]) => {
         });
 
         it('transfer the amount when valid withdraw is requested', async() => {
-            // Refactor this --
-
-            const splitAmount = 5;
+            const splitAmount = 100;
             const withdrawAmount = splitAmount;
 
             await sut.addSplitRecipient(second);
             await sut.split({ value: splitAmount });
 
-            const secondBalance = await web3.eth.getBalance(second);
+            const oldBalance = await web3.eth.getBalance(second);
+
             const gasEstimate = await sut.withdraw.estimateGas(withdrawAmount, { from: second });
-
             const transactionReceipt = await sut.withdraw(withdrawAmount, { from: second });
-            const transactionHash = transactionReceipt.tx;
-            const transaction = await web3.eth.getTransaction(transactionHash);
-            const currentTransactionGasPrice = transaction.gasPrice;
-            const transactionCost = currentTransactionGasPrice.mul(gasEstimate);
+            const transaction = await web3.eth.getTransaction(transactionReceipt.tx);
+            const transactionCost = transaction.gasPrice.mul(gasEstimate);
 
-            const secondBalanceNew = await web3.eth.getBalance(second);
-            const balanceDifference = secondBalance.sub(secondBalanceNew);
+            const newBalance = await web3.eth.getBalance(second);
+            const balanceDifference = oldBalance.sub(newBalance);
 
             assert.deepEqual(balanceDifference, transactionCost.sub(withdrawAmount));
         });
 
         it('emit LogWithdrawal event upon successful withdraw', async() => {
+            const splitAmount = 100;
+            const withdrawAmount = 90;
 
+            await sut.addSplitRecipient(second);
+            await sut.split({ value: splitAmount });
+            
+            const result = await sut.withdraw(withdrawAmount, { from: second });
+
+            assert.equal(result.logs[0].event, 'LogWithdrawal');
         });
     });
 });
