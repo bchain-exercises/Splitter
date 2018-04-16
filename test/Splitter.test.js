@@ -1,21 +1,30 @@
 const Splitter = artifacts.require('./fakes/FakeSplitter.sol');
 
-const assertThrows = async (promise) => {
-    promise
-        .then(() => {
-            assert.fail('Did not throw');
-        })
-        .catch((err) => {
-            const isRevert = err.message.indexOf('revert') >= 0;
-            assert(isRevert, `Expected revert, got ${err} instead`);
-        });
+var assertThrows = async (promise) => {
+    try {
+        await promise;
+    } catch (error) {
+        const invalidOpcode = error.message.search('invalid opcode') >= 0;
+        const invalidJump = error.message.search('invalid JUMP') >= 0;
+        const outOfGas = error.message.search('out of gas') >= 0;
+        const revert = error.message.search('revert') >= 0;
+
+        assert(
+            invalidOpcode || invalidJump || outOfGas || revert,
+            "Expected throw, got '" + error + "' instead",
+        );
+        
+        return;
+    }
+
+    assert.fail('Expected throw not received');
 };
 
-contract('Splitter', ([first, second, third, fourth]) => {
+contract('Splitter', ([owner, second, third, fourth, fifth]) => {
     let sut;
 
     before(() => {
-        web3.eth.defaultAccount = first;
+        web3.eth.defaultAccount = owner;
     });
 
     beforeEach(async () => {
@@ -31,7 +40,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
         });
     
         it('return the sent amount after a valid split is invoked', async () => {
-            await sut.addSplitRecipient(first);
+            await sut.addSplitRecipient(second);
             await sut.split({ value: 42 });
             
             const result = await sut.getContractBalance.call();
@@ -42,9 +51,9 @@ contract('Splitter', ([first, second, third, fourth]) => {
         it('return 0 after a split and withdraw are invoked with the whole balance and one split recipient', async () => {
             const splitWithdrawValue = 42;
     
-            await sut.addSplitRecipient(first);
+            await sut.addSplitRecipient(second);
             await sut.split({ value: splitWithdrawValue });
-            await sut.withdraw(splitWithdrawValue, { from: first });
+            await sut.withdraw(splitWithdrawValue, { from: second });
     
             const result = await sut.getContractBalance.call();
     
@@ -56,10 +65,10 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const withdrawValue = Math.floor(splitValue / 2);
             const expectedBalance = Math.floor(splitValue / 2);
     
-            await sut.addSplitRecipient(first);
             await sut.addSplitRecipient(second);
+            await sut.addSplitRecipient(third);
             await sut.split({ value: splitValue });
-            await sut.withdraw(withdrawValue, { from: first });
+            await sut.withdraw(withdrawValue, { from: second });
     
             const result = await sut.getContractBalance.call();
     
@@ -71,7 +80,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
         it('return default value when no splits are performed benefitting the given address', async() => {
             const expectedValue = 0;
 
-            const result = await sut.getMemberBalance.call(first);
+            const result = await sut.getMemberBalance.call(owner);
 
             assert.equal(result, expectedValue);
         });
@@ -79,10 +88,10 @@ contract('Splitter', ([first, second, third, fourth]) => {
         it('return exact balance when one split is performed benefitting the given address', async() => {
             const splitValue = 42;
 
-            await sut.addSplitRecipient(first);
+            await sut.addSplitRecipient(second);
             await sut.split({ value: splitValue });
 
-            const result = await sut.getMemberBalance.call(first);
+            const result = await sut.getMemberBalance.call(second);
 
             assert.equal(splitValue, result);
         });
@@ -91,11 +100,11 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const splitValue = 42;
             const expectedResult = Math.floor(splitValue / 2);
 
-            await sut.addSplitRecipient(first);
             await sut.addSplitRecipient(second);
+            await sut.addSplitRecipient(third);
             await sut.split({ value: splitValue });
 
-            const result = await sut.getMemberBalance.call(first);
+            const result = await sut.getMemberBalance.call(second);
 
             assert.equal(result, expectedResult);
         });
@@ -104,7 +113,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const splitValue = 43;
             const expectedResult = splitValue % 2;
 
-            await sut.addSplitRecipient(first, { from: third });
+            await sut.addSplitRecipient(owner, { from: third });
             await sut.addSplitRecipient(second, { from: third });
             await sut.split({ value: splitValue, from: third });
 
@@ -117,7 +126,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const splitValue = 42;
             const expectedResult = splitValue % 2;
 
-            await sut.addSplitRecipient(first, { from: third });
+            await sut.addSplitRecipient(owner, { from: third });
             await sut.addSplitRecipient(second, { from: third });
             await sut.split({ value: splitValue, from: third });
 
@@ -139,7 +148,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
         });
 
         it('throw when the sender sends 0', async() => {
-            await sut.addSplitRecipient(first);
+            await sut.addSplitRecipient(second);
 
             const result = sut.split({ value: 0 });
 
@@ -147,10 +156,10 @@ contract('Splitter', ([first, second, third, fourth]) => {
         });
 
         it('throw when the amount sent is less than the split recipients count', async() => {
-            await sut.addSplitRecipient(first);
             await sut.addSplitRecipient(second);
             await sut.addSplitRecipient(third);
             await sut.addSplitRecipient(fourth);
+            await sut.addSplitRecipient(fifth);
 
             const result = sut.split({ value: 3 });
 
@@ -161,12 +170,12 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const splitValue = 99;
             const expectedValue = Math.floor(splitValue / 3);
 
-            await sut.addSplitRecipient(first, { from: fourth });
+            await sut.addSplitRecipient(owner, { from: fourth });
             await sut.addSplitRecipient(second, { from: fourth });
             await sut.addSplitRecipient(third, { from: fourth });
             await sut.split({ from: fourth, value: splitValue });
 
-            const firstBalance = await sut.getMemberBalance.call(first);
+            const firstBalance = await sut.getMemberBalance.call(owner);
             const secondBalance = await sut.getMemberBalance.call(second);
             const thirdBalance = await sut.getMemberBalance.call(third);
 
@@ -179,7 +188,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const splitValue = 100;
             const expectedValue = splitValue % 3;
 
-            await sut.addSplitRecipient(first, { from: fourth });
+            await sut.addSplitRecipient(owner, { from: fourth });
             await sut.addSplitRecipient(second, { from: fourth });
             await sut.addSplitRecipient(third, { from: fourth });
             await sut.split({ from: fourth, value: splitValue });
@@ -202,9 +211,9 @@ contract('Splitter', ([first, second, third, fourth]) => {
         });
 
         it('throw when the recipient is already added', async() => {
-            await sut.addSplitRecipient(first);
+            await sut.addSplitRecipient(second);
             
-            const result = sut.addSplitRecipient(first);
+            const result = sut.addSplitRecipient(second);
 
             assertThrows(result);
         });
@@ -212,7 +221,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
         it('mark the added recipient in the senders recipients', async() => {
             await sut.addSplitRecipient(second);
 
-            const result = await sut.isAddedToRecipients.call(first, second);
+            const result = await sut.isAddedToRecipients.call(owner, second);
 
             assert(result, 'Recipient not marked');
         });
@@ -221,7 +230,7 @@ contract('Splitter', ([first, second, third, fourth]) => {
             const expectedLength = 1;
             await sut.addSplitRecipient(second);
 
-            const result = await sut.getMemberRecipientsLength.call(first);
+            const result = await sut.getMemberRecipientsLength.call(owner);
 
             assert.equal(result, expectedLength);
         });

@@ -1,9 +1,12 @@
 pragma solidity ^0.4.18;
 
 import "../node_modules/zeppelin-solidity/contracts/math/SafeMath.sol";
+import "../node_modules/zeppelin-solidity/contracts/lifecycle/Destructible.sol";
 
-contract Splitter {
+contract Splitter is Destructible {
     using SafeMath for uint256;
+    
+    uint256 public constant MAX_SPLIT_RECIPIENTS = 256;
     
     event LogSplit(address indexed sender, uint256 amount);
     event LogNewSplitRecipient(address indexed splitSender, address indexed splitRecipient);
@@ -39,18 +42,19 @@ contract Splitter {
             members[recipientAddress].balance = members[recipientAddress].balance.add(toSend);
         }
         
-        LogSplit(msg.sender, msg.value);
+        emit LogSplit(msg.sender, msg.value);
     }
     
     function addSplitRecipient(address _splitRecipientAddress) public {
-        require(_splitRecipientAddress != msg.sender);
         require(_splitRecipientAddress != address(0));
+        require(_splitRecipientAddress != msg.sender);
         require(!members[msg.sender].addedRecipients[_splitRecipientAddress]);
+        require(members[msg.sender].splitRecipients.length <= MAX_SPLIT_RECIPIENTS);
         
         members[msg.sender].addedRecipients[_splitRecipientAddress] = true;
         members[msg.sender].splitRecipients.push(_splitRecipientAddress);
         
-        LogNewSplitRecipient(msg.sender, _splitRecipientAddress);
+        emit LogNewSplitRecipient(msg.sender, _splitRecipientAddress);
     }
     
     function withdraw(uint256 _amount) public {
@@ -59,6 +63,6 @@ contract Splitter {
         members[msg.sender].balance = members[msg.sender].balance.sub(_amount);
         msg.sender.transfer(_amount);
         
-        LogWithdrawal(msg.sender, _amount);
+        emit LogWithdrawal(msg.sender, _amount);
     }
 }
