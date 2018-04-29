@@ -46,8 +46,7 @@ contract Splitter is Destructible {
     }
     
     function addSplitRecipient(address _splitRecipientAddress) public {
-        require(_splitRecipientAddress != address(0));
-        require(_splitRecipientAddress != msg.sender);
+        require(_splitRecipientAddress != address(0) && _splitRecipientAddress != msg.sender);
         require(!members[msg.sender].addedRecipients[_splitRecipientAddress]);
         require(members[msg.sender].splitRecipients.length <= MAX_SPLIT_RECIPIENTS);
         
